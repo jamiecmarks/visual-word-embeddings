@@ -1,10 +1,11 @@
 'use client';
 
-import React, { useMemo } from 'react';
+import React, { useState, useRef, useMemo, useEffect } from 'react';
 import { Canvas } from '@react-three/fiber';
 import { OrbitControls, Html, Stars, Sparkles } from '@react-three/drei';
 import { UMAP } from 'umap-js';
 import * as THREE from 'three';
+import { EffectComposer, Bloom } from '@react-three/postprocessing';
 
 interface Props {
   vocab: string[];
@@ -44,40 +45,70 @@ interface Props {
 //   );
 // }
 //
+//
 function WordPoint({
   word,
-  position
+  position,
 }: {
   word: string;
   position: [number, number, number];
 }) {
-  const texture = new THREE.TextureLoader().load('/planet_texture.jpg'); // Use your planet texture path here
   const [x, y, z] = position;
+  const meshRef = useRef<THREE.Mesh>(null);
 
-  // Normalize coordinates to [0, 1]
+  // Normalize for color mapping
   const normalize = (v: number) => (v + 50) / 100;
   const r = normalize(x);
   const g = normalize(y);
   const b = normalize(z);
 
-  const baseColor = new THREE.Color(r * 0.5, g * 0.5, b * 0.5); // muted base
-  const emissiveColor = new THREE.Color(r * 0.2, g * 0.2, b * 0.3); // subtle glow
+  // Dynamic emissive color
+  const emissiveColor = new THREE.Color(r * 0.3, g * 0.3, b * 0.6);
+
+  // Dissolving effect: time-based noise
+  const [noiseFactor, setNoiseFactor] = useState(0);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setNoiseFactor(Math.sin(Date.now() * 0.002) * 0.5); // Slow oscillation for effect
+    }, 50);
+
+    return () => clearInterval(interval); // Cleanup on unmount
+  }, []);
 
   return (
     <group position={position}>
-      <mesh>
-        <sphereGeometry args={[0.5, 32, 32]} />
+      <mesh ref={meshRef}>
+        {/* Dissolving mass using a sphere geometry with subtle noise */}
+        <sphereGeometry args={[0.5, 64, 64]} />
         <meshStandardMaterial
-          map={texture} // Apply the planet texture
-          color={baseColor} // Base color for the planet
-          emissive={emissiveColor} // Soft emissive glow for planet effect
-          emissiveIntensity={0.15} // Adjust the intensity of the glow
-          roughness={0.85} // Give it some roughness to feel more realistic
-          metalness={0.1} // Slight metallic look to simulate planet surface
+          color={new THREE.Color(0, 0, 0)} // Black base color
+          emissive={emissiveColor} // Subtle glowing effect
+          emissiveIntensity={0.7} // Intensity of the glow
+          transparent
+          opacity={0.3 + noiseFactor * 0.4} // Low opacity, fluctuating over time
+          roughness={0.85} // Diffuse, no gloss
+          metalness={0} // Not metallic
+          // Create a dissolving effect with animated noise
+          displacementMap={new THREE.TextureLoader().load('/noise_texture.jpg')} // Add a noise texture to create variation
+          displacementScale={0.1} // Small scale for smooth displacement
         />
       </mesh>
-      <Html distanceFactor={15} position={[0, 0.7, 0]}>
-        <div style={{ backgroundColor: "black", color: 'white', fontSize: '1rem', whiteSpace: 'nowrap' }}>{word}</div>
+
+      <Html distanceFactor={20} position={[0, 0.6, 0]}>
+        <div
+          style={{
+            backgroundColor: 'rgba(0,0,0,0.5)',
+            padding: '0.1rem 0.4rem',
+            borderRadius: '0.25rem',
+            color: 'white',
+            fontSize: '0.85rem',
+            whiteSpace: 'nowrap',
+            backdropFilter: 'blur(4px)',
+          }}
+        >
+          {word}
+        </div>
       </Html>
     </group>
   );
