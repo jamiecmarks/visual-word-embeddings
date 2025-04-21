@@ -12,7 +12,7 @@ export default function Page() {
   if (!embeddings) return <div className="p-4">Loading embeddings...</div>;
 
   return (
-    <main className="h-full bg-gray-900">
+    <main className="h-screen bg-gray-900">
       <EmbeddingScene vocab={words} embeddings={embeddings} />
     </main>
   );

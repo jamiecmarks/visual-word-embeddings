@@ -5,6 +5,7 @@ import { Canvas } from '@react-three/fiber';
 import { OrbitControls, Html, Sparkles, Line } from '@react-three/drei';
 import { UMAP } from 'umap-js';
 import * as THREE from 'three';
+import * as use from '@tensorflow-models/universal-sentence-encoder';
 
 interface Props {
   vocab: string[];
@@ -60,7 +61,7 @@ function WordPoint({
             padding: '0.1rem 0.4rem',
             borderRadius: '0.25rem',
             color: 'white',
-            fontSize: '0.85rem',
+            fontSize: '2.5rem',
             whiteSpace: 'nowrap',
             backdropFilter: 'blur(4px)',
           }}
@@ -79,20 +80,51 @@ export default function EmbeddingScene({ vocab, embeddings }: Props) {
   const [isInputVisible, setIsInputVisible] = useState(false);
   const [validationError, setValidationError] = useState('');
   const [highlightedWord, setHighlightedWord] = useState<string | null>(null);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [model, setModel] = useState<use.UniversalSentenceEncoder | null>(null);
+  const [isModelLoading, setIsModelLoading] = useState(false);
+
+  // Load model on component mount
+  useEffect(() => {
+    async function loadUSEModel() {
+      if (!model && !isModelLoading) {
+        setIsModelLoading(true);
+        try {
+          console.log('Loading Universal Sentence Encoder model...');
+          const loadedModel = await use.load();
+          setModel(loadedModel);
+          console.log('Model loaded successfully');
+        } catch (error) {
+          console.error('Error loading model:', error);
+        } finally {
+          setIsModelLoading(false);
+        }
+      }
+    }
+    
+    loadUSEModel();
+  }, [model, isModelLoading]);
 
   const coords3d = useMemo(() => {
-    const umap = new UMAP({ nComponents: 3, nNeighbors: Math.min(3, currentEmbeddings.length - 1), spread: 5, minDist: 0.8 });
+    const umap = new UMAP({ 
+      nComponents: 3, 
+      nNeighbors: Math.min(5, currentEmbeddings.length - 1), 
+      spread: 5, 
+      minDist: 0.8 
+    });
     return umap.fit(currentEmbeddings);
   }, [currentEmbeddings]);
 
-  // Function to calculate Euclidean distance between two points
-  const calculateDistance = (a: number[], b: number[]) => {
-    return Math.sqrt(a.reduce((acc, val, idx) => acc + Math.pow(val - b[idx], 2), 0));
+  const cosineDistance = (a: number[], b: number[]) => {
+    const dot = a.reduce((acc, val, i) => acc + val * b[i], 0);
+    const normA = Math.sqrt(a.reduce((acc, val) => acc + val * val, 0));
+    const normB = Math.sqrt(b.reduce((acc, val) => acc + val * val, 0));
+    return 1 - dot / (normA * normB);
   };
-
+  
   // Function to find the nearest neighbors of the new word
   const findNearestNeighbors = (embedding: number[], k: number = 5) => {
-    const distances = currentEmbeddings.map((e) => calculateDistance(e, embedding));
+    const distances = currentEmbeddings.map((e) => cosineDistance(e, embedding));
     const sortedIndexes = distances
       .map((d, i) => ({ index: i, distance: d }))
       .sort((a, b) => a.distance - b.distance)
@@ -102,6 +134,11 @@ export default function EmbeddingScene({ vocab, embeddings }: Props) {
 
   // Validate the word
   const validateWord = (word: string) => {
+    if (!word.trim()) {
+      setValidationError('Please enter a word.');
+      return false;
+    }
+    
     const valid = /^[a-zA-Z]+$/.test(word); // Only letters
     if (!valid) {
       setValidationError('Invalid word. Please use only letters.');
@@ -111,19 +148,72 @@ export default function EmbeddingScene({ vocab, embeddings }: Props) {
     return valid;
   };
 
-  const addWord = (newWord: string, newEmbedding: number[]) => {
-    if (validateWord(newWord)) {
+  const addWord = async (newWord: string) => {
+    if (!validateWord(newWord)) return;
+    if (!model) {
+      setValidationError('Model is still loading. Please try again in a moment.');
+      return;
+    }
+
+    setIsProcessing(true);
+    try {
+      // Generate embedding using the pre-trained model
+      const embeddings = await model.embed([newWord.toLowerCase()]);
+      const embeddingArray = await embeddings.array();
+      const newEmbedding = Array.from(embeddingArray[0]);
+      
       setCurrentVocab((prevVocab) => [...prevVocab, newWord]);
       setCurrentEmbeddings((prevEmbeddings) => [...prevEmbeddings, newEmbedding]);
       setInputValue(''); // Clear the input field
       setIsInputVisible(false); // Hide input after adding
       setHighlightedWord(newWord); // Highlight the new word
-
-      // Find the closest words and update their states to highlight them too
-      const nearestNeighbors = findNearestNeighbors(newEmbedding);
-      return nearestNeighbors;
+    } catch (error) {
+      console.error('Error generating embedding:', error);
+      setValidationError('Failed to generate embedding for this word.');
+    } finally {
+      setIsProcessing(false);
     }
-    return [];
+  };
+
+  // If the model isn't loaded yet, use word2vec-like fallback
+  const fallbackAddWord = (newWord: string) => {
+    if (!validateWord(newWord)) return;
+    
+    setIsProcessing(true);
+    try {
+      // Generate a simple word2vec-like embedding (with lower dimensionality)
+      // This is just a fallback when TensorFlow.js model fails to load
+      const chars = newWord.toLowerCase().split('');
+      const charValues = chars.map(c => c.charCodeAt(0) - 96); // a=1, b=2, etc.
+      
+      // Create a simple embedding based on character positions
+      // This is a very simplistic approach but provides some meaning
+      const simpleEmbedding = Array(100).fill(0).map((_, i) => {
+        const charIndex = i % charValues.length;
+        const charValue = charValues[charIndex];
+        const position = i / 100;
+        return Math.sin(charValue * position) * Math.cos(charValue);
+      });
+      
+      setCurrentVocab((prevVocab) => [...prevVocab, newWord]);
+      setCurrentEmbeddings((prevEmbeddings) => [...prevEmbeddings, simpleEmbedding]);
+      setInputValue('');
+      setIsInputVisible(false);
+      setHighlightedWord(newWord);
+    } catch (error) {
+      console.error('Error with fallback embedding:', error);
+      setValidationError('Failed to generate embedding for this word.');
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const handleAddWord = () => {
+    if (model) {
+      addWord(inputValue);
+    } else {
+      fallbackAddWord(inputValue);
+    }
   };
 
   const nearestNeighbors = useMemo(() => {
@@ -138,6 +228,19 @@ export default function EmbeddingScene({ vocab, embeddings }: Props) {
       <h2 className="text-5xl sm:text-4xl text-center leading-tight">
         3D Word Embeddings
       </h2>
+      {isModelLoading ? (
+        <div style={{ position: 'absolute', top: '10px', right: '10px', background: 'rgba(0,0,0,0.7)', color: 'white', padding: '5px 10px', borderRadius: '5px' }}>
+          Loading embedding model...
+        </div>
+      ) : model ? (
+        <div style={{ position: 'absolute', top: '10px', right: '10px', background: 'rgba(0,100,0,0.7)', color: 'white', padding: '5px 10px', borderRadius: '5px' }}>
+          Using Universal Sentence Encoder
+        </div>
+      ) : (
+        <div style={{ position: 'absolute', top: '10px', right: '10px', background: 'rgba(100,0,0,0.7)', color: 'white', padding: '5px 10px', borderRadius: '5px' }}>
+          Using fallback embeddings
+        </div>
+      )}
       <div className="center h-full w-full">
         <Canvas
           className="h-full w-full"
@@ -162,18 +265,22 @@ export default function EmbeddingScene({ vocab, embeddings }: Props) {
           ))}
 
           {/* Render connections between the new word and its neighbors */}
-          {nearestNeighbors.map((neighborIdx) => {
-            const [x1, y1, z1] = coords3d[currentVocab.indexOf(highlightedWord)];
-            const [x2, y2, z2] = coords3d[neighborIdx];
-            return (
-              <Line
-                key={neighborIdx}
-                points={[[x1, y1, z1], [x2, y2, z2]]}
-                color="white"
-                lineWidth={2}
-                opacity={0.5}
-              />
-            );
+          {highlightedWord && nearestNeighbors.map((neighborIdx) => {
+            const highlightedIndex = currentVocab.indexOf(highlightedWord);
+            if (highlightedIndex >= 0 && coords3d[highlightedIndex] && coords3d[neighborIdx]) {
+              const [x1, y1, z1] = coords3d[highlightedIndex];
+              const [x2, y2, z2] = coords3d[neighborIdx];
+              return (
+                <Line
+                  key={`line-${neighborIdx}`}
+                  points={[[x1, y1, z1], [x2, y2, z2]]}
+                  color="white"
+                  lineWidth={2}
+                  opacity={0.5}
+                />
+              );
+            }
+            return null;
           })}
         </Canvas>
       </div>
@@ -210,12 +317,10 @@ export default function EmbeddingScene({ vocab, embeddings }: Props) {
               border: '1px solid #ccc',
               width: '200px',
             }}
+            disabled={isProcessing}
           />
           <button
-            onClick={() => {
-              const newEmbedding = [Math.random(), Math.random(), Math.random()]; // Just an example embedding
-              addWord(inputValue, newEmbedding);
-            }}
+            onClick={handleAddWord}
             style={{
               padding: '10px 20px',
               backgroundColor: '#28a745',
@@ -225,8 +330,9 @@ export default function EmbeddingScene({ vocab, embeddings }: Props) {
               cursor: 'pointer',
               marginLeft: '10px',
             }}
+            disabled={isProcessing}
           >
-            Add
+            {isProcessing ? 'Processing...' : 'Add'}
           </button>
           <button
             onClick={() => setIsInputVisible(false)}
@@ -239,6 +345,7 @@ export default function EmbeddingScene({ vocab, embeddings }: Props) {
               cursor: 'pointer',
               marginLeft: '10px',
             }}
+            disabled={isProcessing}
           >
             Cancel
           </button>
