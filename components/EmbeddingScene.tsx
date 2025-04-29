@@ -1,11 +1,11 @@
-'use client';
+"use client";
 
-import React, { useState, useMemo, useEffect, useRef } from 'react';
-import { Canvas, useThree, useFrame } from '@react-three/fiber';
-import { OrbitControls, Html, Sparkles, Line } from '@react-three/drei';
-import { UMAP } from 'umap-js';
-import * as THREE from 'three';
-import * as use from '@tensorflow-models/universal-sentence-encoder';
+import React, { useState, useMemo, useEffect, useRef } from "react";
+import { Canvas, useThree, useFrame } from "@react-three/fiber";
+import { OrbitControls, Html, Sparkles, Line } from "@react-three/drei";
+import { UMAP } from "umap-js";
+import * as THREE from "three";
+import * as use from "@tensorflow-models/universal-sentence-encoder";
 
 interface Props {
   vocab: string[];
@@ -16,10 +16,12 @@ function WordPoint({
   word,
   position,
   isHighlighted,
+  onSelect,
 }: {
   word: string;
   position: [number, number, number];
   isHighlighted?: boolean;
+  onSelect?: (word: string) => void;
 }) {
   const [x, y, z] = position;
 
@@ -41,11 +43,21 @@ function WordPoint({
   }, []);
 
   return (
-    <group position={position}>
+    <group
+      position={position}
+      onClick={(e) => {
+        e.stopPropagation();
+        if (onSelect) onSelect(word);
+      }}
+    >
       <mesh>
         <sphereGeometry args={[0.5, 64, 64]} />
         <meshStandardMaterial
-          color={isHighlighted ? new THREE.Color(1, 0.5, 0) : new THREE.Color(0, 0, 0)}
+          color={
+            isHighlighted
+              ? new THREE.Color(1, 0.5, 0)
+              : new THREE.Color(0, 0, 0)
+          }
           emissive={emissiveColor}
           emissiveIntensity={0.7}
           transparent
@@ -57,13 +69,13 @@ function WordPoint({
       <Html distanceFactor={20} position={[0, 0.6, 0]}>
         <div
           style={{
-            backgroundColor: 'rgba(0,0,0,0.5)',
-            padding: '0.1rem 0.4rem',
-            borderRadius: '0.25rem',
-            color: 'white',
-            fontSize: '2.5rem',
-            whiteSpace: 'nowrap',
-            backdropFilter: 'blur(4px)',
+            backgroundColor: "rgba(0,0,0,0.5)",
+            padding: "0.1rem 0.4rem",
+            borderRadius: "0.25rem",
+            color: "white",
+            fontSize: "2.5rem",
+            whiteSpace: "nowrap",
+            backdropFilter: "blur(4px)",
           }}
         >
           {word}
@@ -75,76 +87,85 @@ function WordPoint({
 
 // Flying controls
 function FlyControls({ speed = 2 }: { speed?: number }) {
-  const { camera, gl } = useThree()
-  const pressedKeys = useRef<{ [key: string]: boolean }>({})
-  const rotation = useRef({ x: 0, y: 0 })
+  const { camera, gl } = useThree();
+  const pressedKeys = useRef<{ [key: string]: boolean }>({});
+  const rotation = useRef({ x: 0, y: 0 });
 
   useEffect(() => {
-    const down = (e: KeyboardEvent) => pressedKeys.current[e.key.toLowerCase()] = true
-    const up = (e: KeyboardEvent) => pressedKeys.current[e.key.toLowerCase()] = false
-    window.addEventListener('keydown', down)
-    window.addEventListener('keyup', up)
+    const down = (e: KeyboardEvent) =>
+      (pressedKeys.current[e.key.toLowerCase()] = true);
+    const up = (e: KeyboardEvent) =>
+      (pressedKeys.current[e.key.toLowerCase()] = false);
+    window.addEventListener("keydown", down);
+    window.addEventListener("keyup", up);
     return () => {
-      window.removeEventListener('keydown', down)
-      window.removeEventListener('keyup', up)
-    }
-  }, [])
+      window.removeEventListener("keydown", down);
+      window.removeEventListener("keyup", up);
+    };
+  }, []);
 
   useEffect(() => {
-    const canvas = gl.domElement
+    const canvas = gl.domElement;
     const onMouseMove = (e: MouseEvent) => {
       if (document.pointerLockElement === canvas) {
-        rotation.current.y -= e.movementX * 0.002
-        rotation.current.x -= e.movementY * 0.002
-        rotation.current.x = Math.max(-Math.PI/2, Math.min(Math.PI/2, rotation.current.x))
+        rotation.current.y -= e.movementX * 0.002;
+        rotation.current.x -= e.movementY * 0.002;
+        rotation.current.x = Math.max(
+          -Math.PI / 2,
+          Math.min(Math.PI / 2, rotation.current.x)
+        );
       }
-    }
-    const onClick = () => canvas.requestPointerLock()
-    canvas.addEventListener('click', onClick)
-    document.addEventListener('mousemove', onMouseMove)
+    };
+    const onClick = () => canvas.requestPointerLock();
+    canvas.addEventListener("click", onClick);
+    document.addEventListener("mousemove", onMouseMove);
     return () => {
-      canvas.removeEventListener('click', onClick)
-      document.removeEventListener('mousemove', onMouseMove)
-    }
-  }, [gl])
+      canvas.removeEventListener("click", onClick);
+      document.removeEventListener("mousemove", onMouseMove);
+    };
+  }, [gl]);
 
   useFrame(() => {
-    camera.rotation.order = 'YXZ'
-    camera.rotation.y = rotation.current.y
-    camera.rotation.x = rotation.current.x
+    camera.rotation.order = "YXZ";
+    camera.rotation.y = rotation.current.y;
+    camera.rotation.x = rotation.current.x;
 
-    const dir = new THREE.Vector3()
-    const forward = new THREE.Vector3()
-    const right = new THREE.Vector3()
+    const dir = new THREE.Vector3();
+    const forward = new THREE.Vector3();
+    const right = new THREE.Vector3();
 
-    camera.getWorldDirection(forward).normalize()
-    right.crossVectors(forward, camera.up).normalize()
+    camera.getWorldDirection(forward).normalize();
+    right.crossVectors(forward, camera.up).normalize();
 
-    if (pressedKeys.current['w'] || pressedKeys.current['arrowup']) dir.add(forward)
-    if (pressedKeys.current['s'] || pressedKeys.current['arrowdown']) dir.sub(forward)
-    if (pressedKeys.current['a'] || pressedKeys.current['arrowleft']) dir.sub(right)
-    if (pressedKeys.current['d'] || pressedKeys.current['arrowright']) dir.add(right)
+    if (pressedKeys.current["w"] || pressedKeys.current["arrowup"])
+      dir.add(forward);
+    if (pressedKeys.current["s"] || pressedKeys.current["arrowdown"])
+      dir.sub(forward);
+    if (pressedKeys.current["a"] || pressedKeys.current["arrowleft"])
+      dir.sub(right);
+    if (pressedKeys.current["d"] || pressedKeys.current["arrowright"])
+      dir.add(right);
 
     if (dir.lengthSq() > 0) {
-      dir.normalize().multiplyScalar(speed)
-      camera.position.add(dir)
+      dir.normalize().multiplyScalar(speed);
+      camera.position.add(dir);
     }
-  })
+  });
 
-  return null
+  return null;
 }
 
 export default function EmbeddingScene({ vocab, embeddings }: Props) {
   const [currentVocab, setCurrentVocab] = useState(vocab);
   const [currentEmbeddings, setCurrentEmbeddings] = useState(embeddings);
-  const [inputValue, setInputValue] = useState('');
+  const [inputValue, setInputValue] = useState("");
   const [isInputVisible, setIsInputVisible] = useState(false);
-  const [validationError, setValidationError] = useState('');
+  const [validationError, setValidationError] = useState("");
   const [highlightedWord, setHighlightedWord] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [model, setModel] = useState<use.UniversalSentenceEncoder | null>(null);
   const [isModelLoading, setIsModelLoading] = useState(false);
-  const [cameraMode, setCameraMode] = useState<'orbit' | 'fly'>('orbit')
+  const [cameraMode, setCameraMode] = useState<"orbit" | "fly">("orbit");
 
   // Load model on component mount
   useEffect(() => {
@@ -152,27 +173,27 @@ export default function EmbeddingScene({ vocab, embeddings }: Props) {
       if (!model && !isModelLoading) {
         setIsModelLoading(true);
         try {
-          console.log('Loading Universal Sentence Encoder model...');
+          console.log("Loading Universal Sentence Encoder model...");
           const loadedModel = await use.load();
           setModel(loadedModel);
-          console.log('Model loaded successfully');
+          console.log("Model loaded successfully");
         } catch (error) {
-          console.error('Error loading model:', error);
+          console.error("Error loading model:", error);
         } finally {
           setIsModelLoading(false);
         }
       }
     }
-    
+
     loadUSEModel();
   }, [model, isModelLoading]);
 
   const coords3d = useMemo(() => {
-    const umap = new UMAP({ 
-      nComponents: 3, 
-      nNeighbors: Math.min(5, currentEmbeddings.length - 1), 
-      spread: 5, 
-      minDist: 0.8 
+    const umap = new UMAP({
+      nComponents: 3,
+      nNeighbors: Math.min(5, currentEmbeddings.length - 1),
+      spread: 5,
+      minDist: 0.8,
     });
     return umap.fit(currentEmbeddings);
   }, [currentEmbeddings]);
@@ -183,10 +204,12 @@ export default function EmbeddingScene({ vocab, embeddings }: Props) {
     const normB = Math.sqrt(b.reduce((acc, val) => acc + val * val, 0));
     return 1 - dot / (normA * normB);
   };
-  
+
   // Function to find the nearest neighbors of the new word
   const findNearestNeighbors = (embedding: number[], k: number = 5) => {
-    const distances = currentEmbeddings.map((e) => cosineDistance(e, embedding));
+    const distances = currentEmbeddings.map((e) =>
+      cosineDistance(e, embedding)
+    );
     const sortedIndexes = distances
       .map((d, i) => ({ index: i, distance: d }))
       .sort((a, b) => a.distance - b.distance)
@@ -197,15 +220,15 @@ export default function EmbeddingScene({ vocab, embeddings }: Props) {
   // Validate the word
   const validateWord = (word: string) => {
     if (!word.trim()) {
-      setValidationError('Please enter a word.');
+      setValidationError("Please enter a word.");
       return false;
     }
-    
+
     const valid = /^[a-zA-Z]+$/.test(word); // Only letters
     if (!valid) {
-      setValidationError('Invalid word. Please use only letters.');
+      setValidationError("Invalid word. Please use only letters.");
     } else {
-      setValidationError('');
+      setValidationError("");
     }
     return valid;
   };
@@ -213,7 +236,9 @@ export default function EmbeddingScene({ vocab, embeddings }: Props) {
   const addWord = async (newWord: string) => {
     if (!validateWord(newWord)) return;
     if (!model) {
-      setValidationError('Model is still loading. Please try again in a moment.');
+      setValidationError(
+        "Model is still loading. Please try again in a moment."
+      );
       return;
     }
 
@@ -223,15 +248,18 @@ export default function EmbeddingScene({ vocab, embeddings }: Props) {
       const embeddings = await model.embed([newWord.toLowerCase()]);
       const embeddingArray = await embeddings.array();
       const newEmbedding = Array.from(embeddingArray[0]);
-      
+
       setCurrentVocab((prevVocab) => [...prevVocab, newWord]);
-      setCurrentEmbeddings((prevEmbeddings) => [...prevEmbeddings, newEmbedding]);
-      setInputValue(''); // Clear the input field
+      setCurrentEmbeddings((prevEmbeddings) => [
+        ...prevEmbeddings,
+        newEmbedding,
+      ]);
+      setInputValue(""); // Clear the input field
       setIsInputVisible(false); // Hide input after adding
       setHighlightedWord(newWord); // Highlight the new word
     } catch (error) {
-      console.error('Error generating embedding:', error);
-      setValidationError('Failed to generate embedding for this word.');
+      console.error("Error generating embedding:", error);
+      setValidationError("Failed to generate embedding for this word.");
     } finally {
       setIsProcessing(false);
     }
@@ -240,31 +268,36 @@ export default function EmbeddingScene({ vocab, embeddings }: Props) {
   // If the model isn't loaded yet, use word2vec-like fallback
   const fallbackAddWord = (newWord: string) => {
     if (!validateWord(newWord)) return;
-    
+
     setIsProcessing(true);
     try {
       // Generate a simple word2vec-like embedding (with lower dimensionality)
       // This is just a fallback when TensorFlow.js model fails to load
-      const chars = newWord.toLowerCase().split('');
-      const charValues = chars.map(c => c.charCodeAt(0) - 96); // a=1, b=2, etc.
-      
+      const chars = newWord.toLowerCase().split("");
+      const charValues = chars.map((c) => c.charCodeAt(0) - 96); // a=1, b=2, etc.
+
       // Create a simple embedding based on character positions
       // This is a very simplistic approach but provides some meaning
-      const simpleEmbedding = Array(100).fill(0).map((_, i) => {
-        const charIndex = i % charValues.length;
-        const charValue = charValues[charIndex];
-        const position = i / 100;
-        return Math.sin(charValue * position) * Math.cos(charValue);
-      });
-      
+      const simpleEmbedding = Array(100)
+        .fill(0)
+        .map((_, i) => {
+          const charIndex = i % charValues.length;
+          const charValue = charValues[charIndex];
+          const position = i / 100;
+          return Math.sin(charValue * position) * Math.cos(charValue);
+        });
+
       setCurrentVocab((prevVocab) => [...prevVocab, newWord]);
-      setCurrentEmbeddings((prevEmbeddings) => [...prevEmbeddings, simpleEmbedding]);
-      setInputValue('');
+      setCurrentEmbeddings((prevEmbeddings) => [
+        ...prevEmbeddings,
+        simpleEmbedding,
+      ]);
+      setInputValue("");
       setIsInputVisible(false);
       setHighlightedWord(newWord);
     } catch (error) {
-      console.error('Error with fallback embedding:', error);
-      setValidationError('Failed to generate embedding for this word.');
+      console.error("Error with fallback embedding:", error);
+      setValidationError("Failed to generate embedding for this word.");
     } finally {
       setIsProcessing(false);
     }
@@ -286,8 +319,8 @@ export default function EmbeddingScene({ vocab, embeddings }: Props) {
   }, [highlightedWord, currentEmbeddings, currentVocab]);
 
   const toggleCameraMode = () => {
-    setCameraMode((prev) => (prev === 'orbit' ? 'fly' : 'orbit'))
-  }
+    setCameraMode((prev) => (prev === "orbit" ? "fly" : "orbit"));
+  };
 
   return (
     <div>
@@ -295,15 +328,45 @@ export default function EmbeddingScene({ vocab, embeddings }: Props) {
         3D Word Embeddings
       </h2>
       {isModelLoading ? (
-        <div style={{ position: 'absolute', top: '10px', right: '10px', background: 'rgba(0,0,0,0.7)', color: 'white', padding: '5px 10px', borderRadius: '5px' }}>
+        <div
+          style={{
+            position: "absolute",
+            top: "10px",
+            right: "10px",
+            background: "rgba(0,0,0,0.7)",
+            color: "white",
+            padding: "5px 10px",
+            borderRadius: "5px",
+          }}
+        >
           Loading embedding model...
         </div>
       ) : model ? (
-        <div style={{ position: 'absolute', top: '10px', right: '10px', background: 'rgba(0,100,0,0.7)', color: 'white', padding: '5px 10px', borderRadius: '5px' }}>
+        <div
+          style={{
+            position: "absolute",
+            top: "10px",
+            right: "10px",
+            background: "rgba(0,100,0,0.7)",
+            color: "white",
+            padding: "5px 10px",
+            borderRadius: "5px",
+          }}
+        >
           Using Universal Sentence Encoder
         </div>
       ) : (
-        <div style={{ position: 'absolute', top: '10px', right: '10px', background: 'rgba(100,0,0,0.7)', color: 'white', padding: '5px 10px', borderRadius: '5px' }}>
+        <div
+          style={{
+            position: "absolute",
+            top: "10px",
+            right: "10px",
+            background: "rgba(100,0,0,0.7)",
+            color: "white",
+            padding: "5px 10px",
+            borderRadius: "5px",
+          }}
+        >
           Using fallback embeddings
         </div>
       )}
@@ -319,11 +382,16 @@ export default function EmbeddingScene({ vocab, embeddings }: Props) {
           <directionalLight position={[10, 10, 10]} intensity={0.8} />
           <SpaceDust />
           {/* <OrbitControls enableZoom={true} zoomSpeed={0.5} minDistance={5} maxDistance={200} /> */}
-          {cameraMode === 'orbit' && (
-            <OrbitControls enableZoom zoomSpeed={0.5} minDistance={5} maxDistance={200} />
+          {cameraMode === "orbit" && (
+            <OrbitControls
+              enableZoom
+              zoomSpeed={0.5}
+              minDistance={5}
+              maxDistance={200}
+            />
           )}
 
-          {cameraMode === 'fly' && <FlyControls speed={0.2} />}
+          {cameraMode === "fly" && <FlyControls speed={0.2} />}
 
           {/* Render the WordPoint components */}
           {coords3d.map(([x, y, z], i) => (
@@ -331,64 +399,78 @@ export default function EmbeddingScene({ vocab, embeddings }: Props) {
               key={i}
               word={currentVocab[i]}
               position={[x, y, z]}
-              isHighlighted={currentVocab[i] === highlightedWord || nearestNeighbors.includes(i)}
+              isHighlighted={
+                currentVocab[i] === highlightedWord ||
+                nearestNeighbors.includes(i)
+              }
+              onSelect={(word) => {
+                setHighlightedWord(word)
+              }}
             />
           ))}
 
           {/* Render connections between the new word and its neighbors */}
-          {highlightedWord && nearestNeighbors.map((neighborIdx) => {
-            const highlightedIndex = currentVocab.indexOf(highlightedWord);
-            if (highlightedIndex >= 0 && coords3d[highlightedIndex] && coords3d[neighborIdx]) {
-              const [x1, y1, z1] = coords3d[highlightedIndex];
-              const [x2, y2, z2] = coords3d[neighborIdx];
-              return (
-                <Line
-                  key={`line-${neighborIdx}`}
-                  points={[[x1, y1, z1], [x2, y2, z2]]}
-                  color="white"
-                  lineWidth={2}
-                  opacity={0.5}
-                />
-              );
-            }
-            return null;
-          })}
+          {highlightedWord &&
+            nearestNeighbors.map((neighborIdx) => {
+              const highlightedIndex = currentVocab.indexOf(highlightedWord);
+              if (
+                highlightedIndex >= 0 &&
+                coords3d[highlightedIndex] &&
+                coords3d[neighborIdx]
+              ) {
+                const [x1, y1, z1] = coords3d[highlightedIndex];
+                const [x2, y2, z2] = coords3d[neighborIdx];
+                return (
+                  <Line
+                    key={`line-${neighborIdx}`}
+                    points={[
+                      [x1, y1, z1],
+                      [x2, y2, z2],
+                    ]}
+                    color="white"
+                    lineWidth={2}
+                    opacity={0.5}
+                  />
+                );
+              }
+              return null;
+            })}
         </Canvas>
       </div>
 
       {/* Crosshair */}
-      {cameraMode === 'fly' && (
-      <div
-        style={{
-          position: 'absolute',
-          top: '50%',
-          left: '50%',
-          width: '8px',
-          height: '8px',
-          marginLeft: '-4px', // Half width
-          marginTop: '-4px',  // Half height
-          backgroundColor: 'white',
-          borderRadius: '50%',
-          opacity: 0.8,
-          pointerEvents: 'none',
-          zIndex: 50,
-        }}
-      />
-)}
+      {cameraMode === "fly" && (
+        <div
+          style={{
+            position: "absolute",
+            top: "50%",
+            left: "50%",
+            width: "8px",
+            height: "8px",
+            marginLeft: "-4px", // Half width
+            marginTop: "-4px", // Half height
+            backgroundColor: "white",
+            borderRadius: "50%",
+            opacity: 0.8,
+            pointerEvents: "none",
+            zIndex: 50,
+          }}
+        />
+      )}
 
       {/* Add Word button */}
       <button
         onClick={() => setIsInputVisible(true)}
         style={{
-          position: 'absolute',
-          bottom: '20px',
-          left: '20px',
-          padding: '10px 20px',
-          backgroundColor: '#007BFF',
-          color: '#fff',
-          border: 'none',
-          borderRadius: '5px',
-          cursor: 'pointer',
+          position: "absolute",
+          bottom: "20px",
+          left: "20px",
+          padding: "10px 20px",
+          backgroundColor: "#007BFF",
+          color: "#fff",
+          border: "none",
+          borderRadius: "5px",
+          cursor: "pointer",
         }}
       >
         Add Word
@@ -396,45 +478,45 @@ export default function EmbeddingScene({ vocab, embeddings }: Props) {
 
       {/* Input box for adding a new word */}
       {isInputVisible && (
-        <div style={{ position: 'absolute', bottom: '80px', left: '20px' }}>
+        <div style={{ position: "absolute", bottom: "80px", left: "20px" }}>
           <input
             type="text"
             value={inputValue}
             onChange={(e) => setInputValue(e.target.value)}
             placeholder="Enter word"
             style={{
-              padding: '10px',
-              borderRadius: '5px',
-              border: '1px solid #ccc',
-              width: '200px',
+              padding: "10px",
+              borderRadius: "5px",
+              border: "1px solid #ccc",
+              width: "200px",
             }}
             disabled={isProcessing}
           />
           <button
             onClick={handleAddWord}
             style={{
-              padding: '10px 20px',
-              backgroundColor: '#28a745',
-              color: '#fff',
-              border: 'none',
-              borderRadius: '5px',
-              cursor: 'pointer',
-              marginLeft: '10px',
+              padding: "10px 20px",
+              backgroundColor: "#28a745",
+              color: "#fff",
+              border: "none",
+              borderRadius: "5px",
+              cursor: "pointer",
+              marginLeft: "10px",
             }}
             disabled={isProcessing}
           >
-            {isProcessing ? 'Processing...' : 'Add'}
+            {isProcessing ? "Processing..." : "Add"}
           </button>
           <button
             onClick={() => setIsInputVisible(false)}
             style={{
-              padding: '10px 20px',
-              backgroundColor: '#dc3545',
-              color: '#fff',
-              border: 'none',
-              borderRadius: '5px',
-              cursor: 'pointer',
-              marginLeft: '10px',
+              padding: "10px 20px",
+              backgroundColor: "#dc3545",
+              color: "#fff",
+              border: "none",
+              borderRadius: "5px",
+              cursor: "pointer",
+              marginLeft: "10px",
             }}
             disabled={isProcessing}
           >
@@ -443,7 +525,9 @@ export default function EmbeddingScene({ vocab, embeddings }: Props) {
 
           {/* Validation error message */}
           {validationError && (
-            <div style={{ color: 'red', marginTop: '10px' }}>{validationError}</div>
+            <div style={{ color: "red", marginTop: "10px" }}>
+              {validationError}
+            </div>
           )}
         </div>
       )}
@@ -452,18 +536,18 @@ export default function EmbeddingScene({ vocab, embeddings }: Props) {
       <button
         onClick={toggleCameraMode}
         style={{
-          position: 'absolute',
-          bottom: '20px',
-          left: '150px',
-          padding: '10px 20px',
-          backgroundColor: '#007BFF',
-          color: '#fff',
-          border: 'none',
-          borderRadius: '5px',
-          cursor: 'pointer',
+          position: "absolute",
+          bottom: "20px",
+          left: "150px",
+          padding: "10px 20px",
+          backgroundColor: "#007BFF",
+          color: "#fff",
+          border: "none",
+          borderRadius: "5px",
+          cursor: "pointer",
         }}
       >
-        Switch to {cameraMode === 'orbit' ? 'Fly Mode' : 'Orbit Mode'}
+        Switch to {cameraMode === "orbit" ? "Fly Mode" : "Orbit Mode"}
       </button>
     </div>
   );
