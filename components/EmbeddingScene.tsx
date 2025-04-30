@@ -85,76 +85,6 @@ function WordPoint({
   );
 }
 
-// Flying controls
-function FlyControls({ speed = 2 }: { speed?: number }) {
-  const { camera, gl } = useThree();
-  const pressedKeys = useRef<{ [key: string]: boolean }>({});
-  const rotation = useRef({ x: 0, y: 0 });
-
-  useEffect(() => {
-    const down = (e: KeyboardEvent) =>
-      (pressedKeys.current[e.key.toLowerCase()] = true);
-    const up = (e: KeyboardEvent) =>
-      (pressedKeys.current[e.key.toLowerCase()] = false);
-    window.addEventListener("keydown", down);
-    window.addEventListener("keyup", up);
-    return () => {
-      window.removeEventListener("keydown", down);
-      window.removeEventListener("keyup", up);
-    };
-  }, []);
-
-  useEffect(() => {
-    const canvas = gl.domElement;
-    const onMouseMove = (e: MouseEvent) => {
-      if (document.pointerLockElement === canvas) {
-        rotation.current.y -= e.movementX * 0.002;
-        rotation.current.x -= e.movementY * 0.002;
-        rotation.current.x = Math.max(
-          -Math.PI / 2,
-          Math.min(Math.PI / 2, rotation.current.x)
-        );
-      }
-    };
-    const onClick = () => canvas.requestPointerLock();
-    canvas.addEventListener("click", onClick);
-    document.addEventListener("mousemove", onMouseMove);
-    return () => {
-      canvas.removeEventListener("click", onClick);
-      document.removeEventListener("mousemove", onMouseMove);
-    };
-  }, [gl]);
-
-  useFrame(() => {
-    camera.rotation.order = "YXZ";
-    camera.rotation.y = rotation.current.y;
-    camera.rotation.x = rotation.current.x;
-
-    const dir = new THREE.Vector3();
-    const forward = new THREE.Vector3();
-    const right = new THREE.Vector3();
-
-    camera.getWorldDirection(forward).normalize();
-    right.crossVectors(forward, camera.up).normalize();
-
-    if (pressedKeys.current["w"] || pressedKeys.current["arrowup"])
-      dir.add(forward);
-    if (pressedKeys.current["s"] || pressedKeys.current["arrowdown"])
-      dir.sub(forward);
-    if (pressedKeys.current["a"] || pressedKeys.current["arrowleft"])
-      dir.sub(right);
-    if (pressedKeys.current["d"] || pressedKeys.current["arrowright"])
-      dir.add(right);
-
-    if (dir.lengthSq() > 0) {
-      dir.normalize().multiplyScalar(speed);
-      camera.position.add(dir);
-    }
-  });
-
-  return null;
-}
-
 export default function EmbeddingScene({ vocab, embeddings }: Props) {
   const [currentVocab, setCurrentVocab] = useState(vocab);
   const [currentEmbeddings, setCurrentEmbeddings] = useState(embeddings);
@@ -165,7 +95,6 @@ export default function EmbeddingScene({ vocab, embeddings }: Props) {
   const [isProcessing, setIsProcessing] = useState(false);
   const [model, setModel] = useState<use.UniversalSentenceEncoder | null>(null);
   const [isModelLoading, setIsModelLoading] = useState(false);
-  const [cameraMode, setCameraMode] = useState<"orbit" | "fly">("orbit");
 
   // Load model on component mount
   useEffect(() => {
@@ -318,10 +247,6 @@ export default function EmbeddingScene({ vocab, embeddings }: Props) {
     return findNearestNeighbors(currentEmbeddings[idx]);
   }, [highlightedWord, currentEmbeddings, currentVocab]);
 
-  const toggleCameraMode = () => {
-    setCameraMode((prev) => (prev === "orbit" ? "fly" : "orbit"));
-  };
-
   return (
     <div>
       <h2 className="text-5xl sm:text-4xl text-center leading-tight">
@@ -381,17 +306,7 @@ export default function EmbeddingScene({ vocab, embeddings }: Props) {
           <ambientLight intensity={0.6} />
           <directionalLight position={[10, 10, 10]} intensity={0.8} />
           <SpaceDust />
-          {/* <OrbitControls enableZoom={true} zoomSpeed={0.5} minDistance={5} maxDistance={200} /> */}
-          {cameraMode === "orbit" && (
-            <OrbitControls
-              enableZoom
-              zoomSpeed={0.5}
-              minDistance={5}
-              maxDistance={200}
-            />
-          )}
-
-          {cameraMode === "fly" && <FlyControls speed={0.2} />}
+          <OrbitControls enableZoom={true} zoomSpeed={0.5} minDistance={5} maxDistance={200} />
 
           {/* Render the WordPoint components */}
           {coords3d.map(([x, y, z], i) => (
@@ -437,26 +352,6 @@ export default function EmbeddingScene({ vocab, embeddings }: Props) {
             })}
         </Canvas>
       </div>
-
-      {/* Crosshair */}
-      {cameraMode === "fly" && (
-        <div
-          style={{
-            position: "absolute",
-            top: "50%",
-            left: "50%",
-            width: "8px",
-            height: "8px",
-            marginLeft: "-4px", // Half width
-            marginTop: "-4px", // Half height
-            backgroundColor: "white",
-            borderRadius: "50%",
-            opacity: 0.8,
-            pointerEvents: "none",
-            zIndex: 50,
-          }}
-        />
-      )}
 
       {/* Add Word button */}
       <button
@@ -532,23 +427,6 @@ export default function EmbeddingScene({ vocab, embeddings }: Props) {
         </div>
       )}
 
-      {/* Toggle button */}
-      <button
-        onClick={toggleCameraMode}
-        style={{
-          position: "absolute",
-          bottom: "20px",
-          left: "150px",
-          padding: "10px 20px",
-          backgroundColor: "#007BFF",
-          color: "#fff",
-          border: "none",
-          borderRadius: "5px",
-          cursor: "pointer",
-        }}
-      >
-        Switch to {cameraMode === "orbit" ? "Fly Mode" : "Orbit Mode"}
-      </button>
     </div>
   );
 }
