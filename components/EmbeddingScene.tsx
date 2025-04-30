@@ -7,11 +7,13 @@ import { UMAP } from "umap-js";
 import * as THREE from "three";
 import * as use from "@tensorflow-models/universal-sentence-encoder";
 
+// Props expected: vocab list and precomputed embeddings
 interface Props {
   vocab: string[];
   embeddings: number[][];
 }
 
+// Component that renders a single word as a glowing, animated sphere with a text label
 function WordPoint({
   word,
   position,
@@ -25,7 +27,7 @@ function WordPoint({
 }) {
   const [x, y, z] = position;
 
-  // Normalize for color mapping
+  // Normalize x/y/z to color ranges for emissive glow
   const normalize = (v: number) => (v + 50) / 100;
   const r = normalize(x);
   const g = normalize(y);
@@ -34,9 +36,10 @@ function WordPoint({
   const emissiveColor = new THREE.Color(r * 0.3, g * 0.3, b * 0.6);
   const [noiseFactor, setNoiseFactor] = useState(0);
 
+  // Create a pulsing effect over time
   useEffect(() => {
     const interval = setInterval(() => {
-      setNoiseFactor(Math.sin(Date.now() * 0.002) * 0.5); // Slow oscillation for effect
+      setNoiseFactor(Math.sin(Date.now() * 0.002) * 0.5);
     }, 50);
 
     return () => clearInterval(interval);
@@ -66,6 +69,7 @@ function WordPoint({
           metalness={0}
         />
       </mesh>
+      {/* Word label above the sphere */}
       <Html distanceFactor={20} position={[0, 0.6, 0]}>
         <div
           style={{
@@ -85,18 +89,38 @@ function WordPoint({
   );
 }
 
+// Sparkling dust background layer
+function SpaceDust() {
+  return (
+    <Sparkles
+      count={500}
+      size={5}
+      speed={1}
+      scale={[100, 100, 100]}
+      color="white"
+      position={[0, 0, 0]}
+    />
+  );
+}
+
+// Main scene component that renders the 3D embedding space
 export default function EmbeddingScene({ vocab, embeddings }: Props) {
+  // State variables for dynamic vocab and their embeddings
   const [currentVocab, setCurrentVocab] = useState(vocab);
   const [currentEmbeddings, setCurrentEmbeddings] = useState(embeddings);
+
+  // UI states for user input and model state
   const [inputValue, setInputValue] = useState("");
   const [isInputVisible, setIsInputVisible] = useState(false);
   const [validationError, setValidationError] = useState("");
   const [highlightedWord, setHighlightedWord] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
+
+  // TensorFlow model state
   const [model, setModel] = useState<use.UniversalSentenceEncoder | null>(null);
   const [isModelLoading, setIsModelLoading] = useState(false);
 
-  // Load model on component mount
+  // Load Universal Sentence Encoder (USE) model only once
   useEffect(() => {
     async function loadUSEModel() {
       if (!model && !isModelLoading) {
@@ -117,6 +141,7 @@ export default function EmbeddingScene({ vocab, embeddings }: Props) {
     loadUSEModel();
   }, [model, isModelLoading]);
 
+  // Project high-dimensional embeddings to 3D using UMAP
   const coords3d = useMemo(() => {
     const umap = new UMAP({
       nComponents: 3,
@@ -127,6 +152,7 @@ export default function EmbeddingScene({ vocab, embeddings }: Props) {
     return umap.fit(currentEmbeddings);
   }, [currentEmbeddings]);
 
+  // Cosine distance for similarity measurement
   const cosineDistance = (a: number[], b: number[]) => {
     const dot = a.reduce((acc, val, i) => acc + val * b[i], 0);
     const normA = Math.sqrt(a.reduce((acc, val) => acc + val * val, 0));
@@ -134,7 +160,7 @@ export default function EmbeddingScene({ vocab, embeddings }: Props) {
     return 1 - dot / (normA * normB);
   };
 
-  // Function to find the nearest neighbors of the new word
+  // Compute k-nearest neighbors to a word vector
   const findNearestNeighbors = (embedding: number[], k: number = 5) => {
     const distances = currentEmbeddings.map((e) =>
       cosineDistance(e, embedding)
@@ -146,7 +172,7 @@ export default function EmbeddingScene({ vocab, embeddings }: Props) {
     return sortedIndexes.map((item) => item.index);
   };
 
-  // Validate the word
+  // Validate input string for acceptable format
   const validateWord = (word: string) => {
     if (!word.trim()) {
       setValidationError("Please enter a word.");
@@ -162,6 +188,7 @@ export default function EmbeddingScene({ vocab, embeddings }: Props) {
     return valid;
   };
 
+  // Add a new word using the USE model
   const addWord = async (newWord: string) => {
     if (!validateWord(newWord)) return;
     if (!model) {
@@ -194,7 +221,7 @@ export default function EmbeddingScene({ vocab, embeddings }: Props) {
     }
   };
 
-  // If the model isn't loaded yet, use word2vec-like fallback
+  // Fallback if USE model fails — fake embedding by character encoding
   const fallbackAddWord = (newWord: string) => {
     if (!validateWord(newWord)) return;
 
@@ -247,6 +274,8 @@ export default function EmbeddingScene({ vocab, embeddings }: Props) {
       <h2 className="text-5xl sm:text-4xl text-center leading-tight">
         3D Word Embeddings
       </h2>
+
+      {/* Display model loading status */}
       {isModelLoading ? (
         <div
           style={{
@@ -267,7 +296,7 @@ export default function EmbeddingScene({ vocab, embeddings }: Props) {
             position: "absolute",
             top: "10px",
             right: "10px",
-            background: "rgba(0,100,0,0.7)",
+            background: "rgb(110, 124, 146)",
             color: "white",
             padding: "5px 10px",
             borderRadius: "5px",
@@ -290,6 +319,8 @@ export default function EmbeddingScene({ vocab, embeddings }: Props) {
           Using fallback embeddings
         </div>
       )}
+
+      {/* Main 3D visualization canvas */}
       <div className="center h-full w-full">
         <Canvas
           className="h-full w-full"
@@ -308,7 +339,7 @@ export default function EmbeddingScene({ vocab, embeddings }: Props) {
             maxDistance={200}
           />
 
-          {/* Render the WordPoint components */}
+          {/* Render the WordPoint components - glowing spheres */}
           {coords3d.map(([x, y, z], i) => (
             <WordPoint
               key={i}
@@ -338,7 +369,7 @@ export default function EmbeddingScene({ vocab, embeddings }: Props) {
             />
           ))}
 
-          {/* Render connections between the new word and its neighbors */}
+          {/* Draw lines to nearest neighbors */}
           {highlightedWord &&
             nearestIndexes.map((neighborIdx) => {
               const highlightedIndex = currentVocab.indexOf(highlightedWord);
@@ -385,7 +416,7 @@ export default function EmbeddingScene({ vocab, embeddings }: Props) {
         Add Word
       </button>
 
-      {/* Input box for adding a new word */}
+      {/* Floating input UI */}
       {isInputVisible && (
         <div style={{ position: "absolute", bottom: "80px", left: "20px" }}>
           <input
@@ -432,7 +463,6 @@ export default function EmbeddingScene({ vocab, embeddings }: Props) {
             Cancel
           </button>
 
-          {/* Validation error message */}
           {validationError && (
             <div style={{ color: "red", marginTop: "10px" }}>
               {validationError}
@@ -441,18 +471,5 @@ export default function EmbeddingScene({ vocab, embeddings }: Props) {
         </div>
       )}
     </div>
-  );
-}
-
-function SpaceDust() {
-  return (
-    <Sparkles
-      count={500}
-      size={5}
-      speed={1}
-      scale={[100, 100, 100]}
-      color="white"
-      position={[0, 0, 0]}
-    />
   );
 }
