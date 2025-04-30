@@ -2,105 +2,17 @@
 
 import React, { useState, useMemo, useEffect } from "react";
 import { Canvas } from "@react-three/fiber";
-import { OrbitControls, Html, Sparkles, Line } from "@react-three/drei";
+import { OrbitControls, Line } from "@react-three/drei";
 import { UMAP } from "umap-js";
-import * as THREE from "three";
 import * as use from "@tensorflow-models/universal-sentence-encoder";
+
+import WordPoint from "./WordPoint";
+import SpaceDust from "./SpaceDust";
 
 // Props expected: vocab list and precomputed embeddings
 interface Props {
   vocab: string[];
   embeddings: number[][];
-}
-
-// Component that renders a single word as a glowing, animated sphere with a text label
-function WordPoint({
-  word,
-  position,
-  isHighlighted,
-  onSelect,
-}: {
-  word: string;
-  position: [number, number, number];
-  isHighlighted?: boolean;
-  onSelect?: (word: string) => void;
-}) {
-  const [x, y, z] = position;
-
-  // Normalize x/y/z to color ranges for emissive glow
-  const normalize = (v: number) => (v + 50) / 100;
-  const r = normalize(x);
-  const g = normalize(y);
-  const b = normalize(z);
-
-  const emissiveColor = new THREE.Color(r * 0.3, g * 0.3, b * 0.6);
-  const [noiseFactor, setNoiseFactor] = useState(0);
-
-  // Create a pulsing effect over time
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setNoiseFactor(Math.sin(Date.now() * 0.002) * 0.5);
-    }, 50);
-
-    return () => clearInterval(interval);
-  }, []);
-
-  return (
-    <group
-      position={position}
-      onClick={(e) => {
-        e.stopPropagation();
-        if (onSelect) onSelect(word);
-      }}
-    >
-      <mesh>
-        <sphereGeometry args={[0.5, 64, 64]} />
-        <meshStandardMaterial
-          color={
-            isHighlighted
-              ? new THREE.Color(1, 0.5, 0)
-              : new THREE.Color(0, 0, 0)
-          }
-          emissive={emissiveColor}
-          emissiveIntensity={0.7}
-          transparent
-          opacity={0.3 + noiseFactor * 0.4}
-          roughness={0.85}
-          metalness={0}
-        />
-      </mesh>
-      {/* Word label above the sphere */}
-      <Html distanceFactor={20} position={[0, 0.6, 0]}>
-        <div
-          style={{
-            backgroundColor: "rgba(0,0,0,0.5)",
-            padding: "0.1rem 0.4rem",
-            borderRadius: "0.25rem",
-            color: "white",
-            fontSize: "2.5rem",
-            whiteSpace: "nowrap",
-            backdropFilter: "blur(4px)",
-          }}
-        >
-          {word}
-        </div>
-      </Html>
-    </group>
-  );
-}
-
-// Sparkling dust background layer
-function SpaceDust() {
-  return (
-    <Sparkles
-      count={500}
-      size={5}
-      speed={1}
-      scale={[100, 100, 100]}
-      color="white"
-      position={[0, 0, 0]}
-    />
-  );
 }
 
 // Main scene component that renders the 3D embedding space
