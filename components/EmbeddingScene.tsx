@@ -240,12 +240,7 @@ export default function EmbeddingScene({ vocab, embeddings }: Props) {
     }
   };
 
-  const nearestNeighbors = useMemo(() => {
-    if (highlightedWord === null) return [];
-    const idx = currentVocab.indexOf(highlightedWord);
-    if (idx === -1) return [];
-    return findNearestNeighbors(currentEmbeddings[idx]);
-  }, [highlightedWord, currentEmbeddings, currentVocab]);
+  const [nearestIndexes, setNearestIndexes] = useState<number[]>([]);
 
   return (
     <div>
@@ -306,7 +301,12 @@ export default function EmbeddingScene({ vocab, embeddings }: Props) {
           <ambientLight intensity={0.6} />
           <directionalLight position={[10, 10, 10]} intensity={0.8} />
           <SpaceDust />
-          <OrbitControls enableZoom={true} zoomSpeed={0.5} minDistance={5} maxDistance={200} />
+          <OrbitControls
+            enableZoom={true}
+            zoomSpeed={0.5}
+            minDistance={5}
+            maxDistance={200}
+          />
 
           {/* Render the WordPoint components */}
           {coords3d.map(([x, y, z], i) => (
@@ -316,17 +316,31 @@ export default function EmbeddingScene({ vocab, embeddings }: Props) {
               position={[x, y, z]}
               isHighlighted={
                 currentVocab[i] === highlightedWord ||
-                nearestNeighbors.includes(i)
+                nearestIndexes.includes(i)
               }
               onSelect={(word) => {
-                setHighlightedWord(word)
+                if (highlightedWord === word) {
+                  // Clicking the same word again — clear selection
+                  setHighlightedWord(null);
+                  setNearestIndexes([]);
+                } else {
+                  // New word selected — compute nearest neighbors
+                  setHighlightedWord(word);
+                  const idx = currentVocab.indexOf(word);
+                  if (idx !== -1) {
+                    const neighbors = findNearestNeighbors(
+                      currentEmbeddings[idx]
+                    );
+                    setNearestIndexes(neighbors);
+                  }
+                }
               }}
             />
           ))}
 
           {/* Render connections between the new word and its neighbors */}
           {highlightedWord &&
-            nearestNeighbors.map((neighborIdx) => {
+            nearestIndexes.map((neighborIdx) => {
               const highlightedIndex = currentVocab.indexOf(highlightedWord);
               if (
                 highlightedIndex >= 0 &&
@@ -426,7 +440,6 @@ export default function EmbeddingScene({ vocab, embeddings }: Props) {
           )}
         </div>
       )}
-
     </div>
   );
 }
