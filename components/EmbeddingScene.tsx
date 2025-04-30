@@ -1,7 +1,7 @@
 "use client";
 
-import React, { useState, useMemo, useEffect, useRef } from "react";
-import { Canvas, useThree, useFrame } from "@react-three/fiber";
+import React, { useState, useMemo, useEffect } from "react";
+import { Canvas } from "@react-three/fiber";
 import { OrbitControls, Html, Sparkles, Line } from "@react-three/drei";
 import { UMAP } from "umap-js";
 import * as THREE from "three";
