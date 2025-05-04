@@ -1,4 +1,8 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+Visual Word Embeddings is a fun visualization project that uses tensorflow embeddings to create
+and interactive, space-like 3D visualization. The project uses UMAP to reduce the dimensionality of the word embeddings, and
+then uses three.js to create an awesome looking plot. The project is designed to be interactive, allowing the user to rotate and
+zoom in on the plot as well as adding words to the plot to see how LLMs ’understand’ the semantics of words. This servers as
+a fun introduction to LLMs and word embeddings for students, something that I was looking for when learning about them.
 
 ## Getting Started
 First, download and install the dependencies:
